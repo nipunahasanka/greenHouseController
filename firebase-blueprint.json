@@ -1,0 +1,46 @@
+{
+  "entities": {
+    "User": {
+      "collection": "users",
+      "path": "/users/{userId}",
+      "fields": {
+        "userId": { "type": "string", "description": "User UID from Firebase Auth" },
+        "email": { "type": "string", "description": "User email address" },
+        "activeDeviceId": { "type": "string", "description": "Currently active ESP32 device ID" },
+        "updatedAt": { "type": "timestamp", "description": "Last update timestamp" }
+      },
+      "access": {
+        "read": "request.auth != null && request.auth.uid == userId",
+        "write": "request.auth != null && request.auth.uid == userId"
+      }
+    },
+    "Device": {
+      "collection": "devices",
+      "path": "/devices/{deviceId}",
+      "fields": {
+        "deviceId": { "type": "string", "description": "ESP32 hardware serial key" },
+        "ownerUserId": { "type": "string", "description": "Owner user UID" },
+        "deviceName": { "type": "string", "description": "User friendly device nickname" },
+        "isOnline": { "type": "boolean", "description": "ESP32 online status" },
+        "temperature": { "type": "number", "description": "Ambient temperature in Celsius" },
+        "humidity": { "type": "number", "description": "Relative humidity percentage" },
+        "tankWaterPresent": { "type": "boolean", "description": "Feed tank float sensor reading" },
+        "valve1SprinklerActive": { "type": "boolean", "description": "Sprinkler relay state" },
+        "valve1SprinklerMode": { "type": "string", "description": "AUTOMATIC or MANUAL" },
+        "valve1ManualOverride": { "type": "boolean", "description": "Manual override switch" },
+        "valve2DripActive": { "type": "boolean", "description": "Drip valve relay state" },
+        "valve2DripMode": { "type": "string", "description": "AUTOMATIC or MANUAL" },
+        "valve2ManualOverride": { "type": "boolean", "description": "Manual override switch" },
+        "maxTempThreshold": { "type": "number", "description": "Max temp threshold in C" },
+        "minHumidityThreshold": { "type": "number", "description": "Min humidity threshold in %" },
+        "sprinklerDurationSeconds": { "type": "number", "description": "Sprinkler run duration in seconds" },
+        "dripTimeSlots": { "type": "array", "description": "List of scheduled drip time slots" },
+        "updatedAt": { "type": "timestamp", "description": "Last updated timestamp" }
+      },
+      "access": {
+        "read": "request.auth != null",
+        "write": "request.auth != null"
+      }
+    }
+  }
+}

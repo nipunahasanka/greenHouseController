@@ -1,0 +1,8 @@
+{
+  "firestore": [
+    {
+      "database": "ai-studio-android-greenhou-49729264-82dc-4e5a-bb24-933f34cb6d6a",
+      "rules": "firestore.rules"
+    }
+  ]
+}

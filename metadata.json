@@ -1,0 +1,6 @@
+{
+  "name": "Greenhouse Controller",
+  "description": "ESP32 IoT Greenhouse Sprinkler & Climate Controller with real-time telemetry, automated & manual sprinkler controls, and BLE device pairing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
