@@ -1,11 +1,17 @@
 package com.example
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -94,6 +100,24 @@ fun GreenhouseApp(viewModel: GreenhouseViewModel) {
 
   val snackbarHostState = remember { SnackbarHostState() }
 
+  val bluetoothPermissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestMultiplePermissions()
+  ) { _ -> }
+
+  fun ensureBluetoothPermissions() {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      val needed = arrayOf(
+        Manifest.permission.BLUETOOTH_SCAN,
+        Manifest.permission.BLUETOOTH_CONNECT
+      ).filter {
+        ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+      }
+      if (needed.isNotEmpty()) {
+        bluetoothPermissionLauncher.launch(needed.toTypedArray())
+      }
+    }
+  }
+
   // Handle back button when not on Dashboard
   BackHandler(enabled = selectedTab != GreenhouseNavTab.DASHBOARD && !showQrScanner) {
     selectedTab = GreenhouseNavTab.DASHBOARD
@@ -148,10 +172,12 @@ fun GreenhouseApp(viewModel: GreenhouseViewModel) {
         deviceData = deviceData,
         userEmail = currentUser?.email,
         onOpenScanner = {
+          ensureBluetoothPermissions()
           viewModel.resetBleProvisioning()
           showQrScanner = true
         },
         onOpenPairing = {
+          ensureBluetoothPermissions()
           viewModel.resetBleProvisioning()
           showPairingSheet = true
         },

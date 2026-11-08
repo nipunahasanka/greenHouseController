@@ -29,6 +29,7 @@ import java.util.UUID
 
 import com.example.util.BleProvisioningManager
 import com.example.util.ProvisioningState
+import com.example.util.ProvisioningStep
 
 class GreenhouseViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -71,29 +72,64 @@ class GreenhouseViewModel(application: Application) : AndroidViewModel(applicati
       }
     }
     auth.addAuthStateListener(authListener)
+
+    viewModelScope.launch {
+      provisioningState.collectLatest { state ->
+        val user = auth.currentUser
+        if (user != null) {
+          val devId = state.targetDeviceId.ifBlank { "ESP-EF66C4" }
+          if (state.step == ProvisioningStep.SUCCESS || state.targetDeviceId.isNotBlank()) {
+            bindAndObserveDevice(user.uid, devId)
+          }
+        }
+      }
+    }
   }
 
   fun ensureUserProfileInitialized() {
     val user = auth.currentUser ?: return
     viewModelScope.launch {
       repository.ensureUserProfileExists(user.uid, user.email ?: "")
+      val devId = provisioningState.value.targetDeviceId.ifBlank { "ESP-EF66C4" }
+      repository.ensureUserAndDeviceBinding(user.uid, devId)
+    }
+  }
+
+  fun bindAndObserveDevice(userId: String, deviceId: String) {
+    if (userId.isBlank() || deviceId.isBlank()) return
+    viewModelScope.launch {
+      repository.ensureUserAndDeviceBinding(userId, deviceId)
+      val currentProf = _userProfile.value ?: UserProfile(userId = userId, email = auth.currentUser?.email ?: "")
+      _userProfile.value = currentProf.copy(activeDeviceId = deviceId)
+      startObservingDevice(deviceId)
     }
   }
 
   private fun startObservingUser(userId: String) {
     profileJob?.cancel()
     profileJob = viewModelScope.launch {
-      auth.currentUser?.email?.let { email ->
-        repository.ensureUserProfileExists(userId, email)
-      }
+      val email = auth.currentUser?.email ?: ""
+      val targetDev = provisioningState.value.targetDeviceId.ifBlank { "ESP-EF66C4" }
+      
+      // Immediately bind and observe target device on startup/login
+      repository.ensureUserAndDeviceBinding(userId, targetDev)
+      _userProfile.value = UserProfile(userId = userId, email = email, activeDeviceId = targetDev)
+      startObservingDevice(targetDev)
+
       repository.observeUserProfile(userId).collectLatest { profile ->
-        _userProfile.value = profile
-        val activeDeviceId = profile?.activeDeviceId
+        var activeDeviceId = profile?.activeDeviceId
+        if (activeDeviceId.isNullOrBlank()) {
+          activeDeviceId = targetDev
+          repository.ensureUserAndDeviceBinding(userId, targetDev)
+        }
+
+        val updatedProfile = (profile ?: UserProfile(userId = userId, email = email)).copy(
+          activeDeviceId = activeDeviceId
+        )
+        _userProfile.value = updatedProfile
+
         if (!activeDeviceId.isNullOrBlank()) {
           startObservingDevice(activeDeviceId)
-        } else {
-          deviceJob?.cancel()
-          _deviceData.value = null
         }
       }
     }
@@ -107,6 +143,7 @@ class GreenhouseViewModel(application: Application) : AndroidViewModel(applicati
     setupKey: String? = null
   ) {
     val user = auth.currentUser ?: return
+    bindAndObserveDevice(user.uid, deviceId)
     BleProvisioningManager.startProvisioning(
       scope = viewModelScope,
       context = context,
@@ -126,6 +163,7 @@ class GreenhouseViewModel(application: Application) : AndroidViewModel(applicati
   private fun startObservingDevice(deviceId: String) {
     deviceJob?.cancel()
     deviceJob = viewModelScope.launch {
+      repository.ensureDeviceControlsExist(deviceId)
       repository.observeDevice(deviceId).collectLatest { data ->
         _deviceData.value = data
       }

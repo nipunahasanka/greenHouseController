@@ -1,9 +1,13 @@
 package com.example.ui.dialogs
 
 import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.ContextCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -105,6 +109,42 @@ fun WifiSetupBottomSheet(
   var isScanningWifi by remember { mutableStateOf(false) }
   var showSsidDropdown by remember { mutableStateOf(false) }
 
+  val requiredBtPermissions = remember {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+      arrayOf(
+        Manifest.permission.BLUETOOTH_SCAN,
+        Manifest.permission.BLUETOOTH_CONNECT,
+        Manifest.permission.ACCESS_FINE_LOCATION
+      )
+    } else {
+      arrayOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+      )
+    }
+  }
+
+  var pendingPairingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+  val btPermissionLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.RequestMultiplePermissions()
+  ) { _ ->
+    pendingPairingAction?.invoke()
+    pendingPairingAction = null
+  }
+
+  fun checkAndStartPairing(action: () -> Unit) {
+    val ungranted = requiredBtPermissions.filter {
+      ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
+    }
+    if (ungranted.isNotEmpty()) {
+      pendingPairingAction = action
+      btPermissionLauncher.launch(ungranted.toTypedArray())
+    } else {
+      action()
+    }
+  }
+
   val permissionLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.RequestPermission()
   ) { granted ->
@@ -137,6 +177,14 @@ fun WifiSetupBottomSheet(
       if (scannedNetworks.isNotEmpty() && wifiSsid.isBlank()) {
         wifiSsid = scannedNetworks.first().ssid
       }
+    }
+  }
+
+  LaunchedEffect(provisioningState.step) {
+    if (provisioningState.step == ProvisioningStep.SUCCESS) {
+      delay(1500L)
+      onResetStatus()
+      onDismiss()
     }
   }
 
@@ -532,7 +580,9 @@ fun WifiSetupBottomSheet(
           Button(
             onClick = {
               onResetStatus()
-              onConnectAndPair(deviceId, wifiSsid, wifiPassword, setupKey)
+              checkAndStartPairing {
+                onConnectAndPair(deviceId, wifiSsid, wifiPassword, setupKey)
+              }
             },
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
             shape = RoundedCornerShape(12.dp),
@@ -548,7 +598,9 @@ fun WifiSetupBottomSheet(
         } else {
           Button(
             onClick = {
-              onConnectAndPair(deviceId, wifiSsid, wifiPassword, setupKey)
+              checkAndStartPairing {
+                onConnectAndPair(deviceId, wifiSsid, wifiPassword, setupKey)
+              }
             },
             enabled = !isRunning && deviceId.isNotBlank() && wifiSsid.isNotBlank(),
             shape = RoundedCornerShape(12.dp),
